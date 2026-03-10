@@ -46,18 +46,21 @@ contract HardStaking is IStaking, IERC721Receiver, ReentrancyGuard, Ownable {
     }
 
     function stakeBatch(uint256[] calldata tokenIds) external nonReentrant {
-        if (tokenIds.length == 0) revert EmptyBatch();
-        if (tokenIds.length > MAX_BATCH_SIZE) revert BatchTooLarge();
+        uint256 len = tokenIds.length;
+        if (len == 0) revert EmptyBatch();
+        if (len > MAX_BATCH_SIZE) revert BatchTooLarge();
 
-        for (uint256 i = 0; i < tokenIds.length; i++) {
+        uint256[] storage userTokens = _userStakedTokens[msg.sender];
+        for (uint256 i = 0; i < len; ) {
             uint256 tokenId = tokenIds[i];
             if (nftContract.ownerOf(tokenId) != msg.sender) revert NotTokenOwner();
 
             stakes[tokenId] = StakeInfo({owner: msg.sender, stakedAt: uint64(block.timestamp), accruedRewards: 0});
-            _userStakedTokens[msg.sender].push(tokenId);
+            userTokens.push(tokenId);
 
             nftContract.transferFrom(msg.sender, address(this), tokenId);
             emit Staked(msg.sender, tokenId);
+            unchecked { ++i; }
         }
     }
 
@@ -79,10 +82,11 @@ contract HardStaking is IStaking, IERC721Receiver, ReentrancyGuard, Ownable {
     }
 
     function unstakeBatch(uint256[] calldata tokenIds) external nonReentrant {
-        if (tokenIds.length == 0) revert EmptyBatch();
-        if (tokenIds.length > MAX_BATCH_SIZE) revert BatchTooLarge();
+        uint256 len = tokenIds.length;
+        if (len == 0) revert EmptyBatch();
+        if (len > MAX_BATCH_SIZE) revert BatchTooLarge();
 
-        for (uint256 i = 0; i < tokenIds.length; i++) {
+        for (uint256 i = 0; i < len; ) {
             uint256 tokenId = tokenIds[i];
             StakeInfo memory info = stakes[tokenId];
             if (info.owner != msg.sender) revert TokenNotStaked();
@@ -96,6 +100,7 @@ contract HardStaking is IStaking, IERC721Receiver, ReentrancyGuard, Ownable {
             if (rewards > 0) rewardToken.mint(msg.sender, rewards);
 
             emit Unstaked(msg.sender, tokenId, rewards);
+            unchecked { ++i; }
         }
     }
 
@@ -146,12 +151,13 @@ contract HardStaking is IStaking, IERC721Receiver, ReentrancyGuard, Ownable {
     function _removeFromUserTokens(address user, uint256 tokenId) internal {
         uint256[] storage tokens = _userStakedTokens[user];
         uint256 len = tokens.length;
-        for (uint256 i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len; ) {
             if (tokens[i] == tokenId) {
                 tokens[i] = tokens[len - 1];
                 tokens.pop();
                 return;
             }
+            unchecked { ++i; }
         }
     }
 }

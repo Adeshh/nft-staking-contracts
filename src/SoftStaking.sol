@@ -130,12 +130,13 @@ contract SoftStaking is IStaking, ReentrancyGuard, Ownable {
     function _removeFromUserTokens(address user, uint256 tokenId) internal {
         uint256[] storage tokens = _userStakedTokens[user];
         uint256 len = tokens.length;
-        for (uint256 i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len; ) {
             if (tokens[i] == tokenId) {
                 tokens[i] = tokens[len - 1];
                 tokens.pop();
                 return;
             }
+            unchecked { ++i; }
         }
     }
 }
