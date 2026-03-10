@@ -33,12 +33,15 @@ contract SoftStaking is IStaking, ReentrancyGuard, Ownable {
     // no transferFrom — just records who staked and when
 
     function stake(uint256 tokenId) external nonReentrant {
+        // checks
         if (nftContract.ownerOf(tokenId) != msg.sender) revert NotTokenOwner();
         if (stakes[tokenId].owner != address(0)) revert AlreadyStaked();
 
+        // effects
         stakes[tokenId] = StakeInfo({owner: msg.sender, stakedAt: uint64(block.timestamp), accruedRewards: 0});
         _userStakedTokens[msg.sender].push(tokenId);
 
+        // interactions
         emit Staked(msg.sender, tokenId);
     }
 
@@ -46,9 +49,9 @@ contract SoftStaking is IStaking, ReentrancyGuard, Ownable {
 
     // pays only checkpointed rewards if NFT was transferred away
     function unstake(uint256 tokenId) external nonReentrant {
+        // checks
         StakeInfo memory info = stakes[tokenId];
         if (info.owner != msg.sender) revert TokenNotStaked();
-
         uint256 rewards;
         if (_stillOwnsNFT(msg.sender, tokenId)) {
             rewards = _calculateRewards(info);
@@ -56,9 +59,11 @@ contract SoftStaking is IStaking, ReentrancyGuard, Ownable {
             rewards = uint256(info.accruedRewards);
         }
 
+        // effects
         delete stakes[tokenId];
         _removeFromUserTokens(msg.sender, tokenId);
 
+        // interactions
         if (rewards > 0) rewardToken.mint(msg.sender, rewards);
         emit Unstaked(msg.sender, tokenId, rewards);
     }
@@ -66,14 +71,17 @@ contract SoftStaking is IStaking, ReentrancyGuard, Ownable {
     // rewards
 
     function claimRewards(uint256 tokenId) external nonReentrant {
+        // checks
         StakeInfo storage info = stakes[tokenId];
         if (info.owner != msg.sender) revert TokenNotStaked();
         if (!_stillOwnsNFT(msg.sender, tokenId)) revert OwnershipLost();
-
         uint256 rewards = _calculateRewards(info);
+
+        // effects
         info.accruedRewards = 0;
         info.stakedAt = uint64(block.timestamp);
 
+        // interactions
         if (rewards > 0) rewardToken.mint(msg.sender, rewards);
         emit RewardsClaimed(msg.sender, tokenId, rewards);
     }
@@ -88,10 +96,12 @@ contract SoftStaking is IStaking, ReentrancyGuard, Ownable {
     // lock in accrued rewards before transferring the NFT
 
     function checkpoint(uint256 tokenId) external nonReentrant {
+        // checks
         StakeInfo storage info = stakes[tokenId];
         if (info.owner != msg.sender) revert TokenNotStaked();
         if (!_stillOwnsNFT(msg.sender, tokenId)) revert OwnershipLost();
 
+        // effects (no interactions — purely internal state update)
         uint256 earned = (block.timestamp - uint256(info.stakedAt)) * uint256(rewardRate);
         info.accruedRewards += uint128(earned);
         info.stakedAt = uint64(block.timestamp);
@@ -110,7 +120,10 @@ contract SoftStaking is IStaking, ReentrancyGuard, Ownable {
     // admin
 
     function setRewardRate(uint128 newRate) external onlyOwner {
+        // checks
         if (newRate == 0) revert ZeroRewardRate();
+
+        // effects
         emit RewardRateUpdated(rewardRate, newRate);
         rewardRate = newRate;
     }

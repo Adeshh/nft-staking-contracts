@@ -36,28 +36,35 @@ contract HardStaking is IStaking, IERC721Receiver, ReentrancyGuard, Ownable {
     // staking
 
     function stake(uint256 tokenId) external nonReentrant {
+        // checks
         if (nftContract.ownerOf(tokenId) != msg.sender) revert NotTokenOwner();
 
+        // effects
         stakes[tokenId] = StakeInfo({owner: msg.sender, stakedAt: uint64(block.timestamp), accruedRewards: 0});
         _userStakedTokens[msg.sender].push(tokenId);
 
+        // interactions
         nftContract.transferFrom(msg.sender, address(this), tokenId);
         emit Staked(msg.sender, tokenId);
     }
 
     function stakeBatch(uint256[] calldata tokenIds) external nonReentrant {
         uint256 len = tokenIds.length;
+        // checks
         if (len == 0) revert EmptyBatch();
         if (len > MAX_BATCH_SIZE) revert BatchTooLarge();
 
         uint256[] storage userTokens = _userStakedTokens[msg.sender];
         for (uint256 i = 0; i < len; ) {
             uint256 tokenId = tokenIds[i];
+            // checks
             if (nftContract.ownerOf(tokenId) != msg.sender) revert NotTokenOwner();
 
+            // effects
             stakes[tokenId] = StakeInfo({owner: msg.sender, stakedAt: uint64(block.timestamp), accruedRewards: 0});
             userTokens.push(tokenId);
 
+            // interactions
             nftContract.transferFrom(msg.sender, address(this), tokenId);
             emit Staked(msg.sender, tokenId);
             unchecked { ++i; }
@@ -67,38 +74,41 @@ contract HardStaking is IStaking, IERC721Receiver, ReentrancyGuard, Ownable {
     // unstaking
 
     function unstake(uint256 tokenId) external nonReentrant {
+        // checks
         StakeInfo memory info = stakes[tokenId];
         if (info.owner != msg.sender) revert TokenNotStaked();
-
         uint256 rewards = _calculateRewards(info);
 
+        // effects
         delete stakes[tokenId];
         _removeFromUserTokens(msg.sender, tokenId);
 
+        // interactions
         nftContract.transferFrom(address(this), msg.sender, tokenId);
         if (rewards > 0) rewardToken.mint(msg.sender, rewards);
-
         emit Unstaked(msg.sender, tokenId, rewards);
     }
 
     function unstakeBatch(uint256[] calldata tokenIds) external nonReentrant {
         uint256 len = tokenIds.length;
+        // checks
         if (len == 0) revert EmptyBatch();
         if (len > MAX_BATCH_SIZE) revert BatchTooLarge();
 
         for (uint256 i = 0; i < len; ) {
             uint256 tokenId = tokenIds[i];
+            // checks
             StakeInfo memory info = stakes[tokenId];
             if (info.owner != msg.sender) revert TokenNotStaked();
-
             uint256 rewards = _calculateRewards(info);
 
+            // effects
             delete stakes[tokenId];
             _removeFromUserTokens(msg.sender, tokenId);
 
+            // interactions
             nftContract.transferFrom(address(this), msg.sender, tokenId);
             if (rewards > 0) rewardToken.mint(msg.sender, rewards);
-
             emit Unstaked(msg.sender, tokenId, rewards);
             unchecked { ++i; }
         }
@@ -107,13 +117,16 @@ contract HardStaking is IStaking, IERC721Receiver, ReentrancyGuard, Ownable {
     // rewards
 
     function claimRewards(uint256 tokenId) external nonReentrant {
+        // checks
         StakeInfo storage info = stakes[tokenId];
         if (info.owner != msg.sender) revert TokenNotStaked();
-
         uint256 rewards = _calculateRewards(info);
+
+        // effects
         info.accruedRewards = 0;
         info.stakedAt = uint64(block.timestamp);
 
+        // interactions
         if (rewards > 0) rewardToken.mint(msg.sender, rewards);
         emit RewardsClaimed(msg.sender, tokenId, rewards);
     }
@@ -133,7 +146,10 @@ contract HardStaking is IStaking, IERC721Receiver, ReentrancyGuard, Ownable {
     // admin
 
     function setRewardRate(uint128 newRate) external onlyOwner {
+        // checks
         if (newRate == 0) revert ZeroRewardRate();
+
+        // effects
         emit RewardRateUpdated(rewardRate, newRate);
         rewardRate = newRate;
     }
